@@ -9,11 +9,20 @@ from progress.bar import Bar
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Making sure Yaml understand how to represent a defaultdict
+################################################################################
 from collections import defaultdict
 from yaml.representer import Representer
 
-yaml.add_representer(defaultdict, Representer.represent_dict)
+class NestedDefaultDict(defaultdict):
+    def __init__(self, *args, **kwargs):
+        super(NestedDefaultDict, self).__init__(NestedDefaultDict, *args, **kwargs)
+
+    def __repr__(self):
+        return repr(dict(self))
+
+# Making sure Yaml understand how to represent a NestedDefaultDict
+yaml.add_representer(NestedDefaultDict, Representer.represent_dict)
+################################################################################
 
 # read config
 with open("config.yml") as file:
@@ -185,20 +194,17 @@ def generate_yaml(devices, filename=file_path):
     #with open("python_dict.json", "r") as file:
     #    devices = json.load(file)
     #########################################
-
-    def nested_default():
-        return defaultdict(dict)
     
-    inventory = defaultdict(dict)
-    inventory["all"]["children"] = defaultdict(nested_default)
+    # Infinitely deep defaultdict
+    inventory = NestedDefaultDict()
 
     for device in devices:
         name, ip, device_type, location = (
         device["name"], device["ip"], device["device_type"].lower(), device["location"]
         )
 
-        inventory["all"]["children"][location]["hosts"][name] = {"ansible_host": ip}
-        inventory["all"]["children"][device_type]["hosts"][name] = {"ansible_host": ip}
+        inventory["all"]["children"][location]["hosts"][name]["ansible_host"] = ip
+        inventory["all"]["children"][device_type]["hosts"][name]["ansible_host"] = ip
 
     print(f"\n \n **** Writing inventory to disk at location: {filename}. time: {datetime.now()} ****")
 
